@@ -1,128 +1,220 @@
-# Fila de Pronto-Socorro — API (Bloco 2)
+# Fila de Pronto-Socorro — Sistema Distribuído (Web II)
 
-Back-end em Django + Django REST Framework. Este projeto é a base: o mecanismo de
-atualização em tempo real e o painel público serão encaixados conforme o desenho
-de arquitetura do Bloco 1.
+Sistema distribuído de fila de atendimento para pronto-socorro hospitalar desenvolvido com **Django**, **Django REST Framework** e frontend puro (HTML5, CSS3 moderno e Vanilla JavaScript), em conformidade com as regras da disciplina de **Programação Web II** (Avaliação 2 / Bloco 3).
 
-## Estrutura
+---
 
+## 1. Visão Geral da Arquitetura
+
+O sistema opera de forma distribuída em rede local (LAN/Wi-Fi):
+- **Servidor Central (Notebook do Servidor)**: Executa a aplicação Django com o banco de dados e a API REST em `0.0.0.0:8000`.
+- **Estação da Recepção (Notebook do Administrador)**: Acessa a interface administrativa web em `/admin-fila/` para triagem, cadastro, remoção e chamada de pacientes. As operações exigem autenticação via Token (armazenado em `sessionStorage`).
+- **Sala de Espera (TV / Monitor / Segundo Notebook)**: Acessa o painel público em `/painel/`, sem necessidade de login. Atualiza automaticamente em tempo real (polling de 2,5s), exibe a contagem de pessoas aguardando, destaca o paciente chamado com dados reduzidos (**LGPD**) e emite **aviso sonoro** sintetizado via Web Audio API.
+
+---
+
+## 2. Estrutura do Projeto
+
+```text
+fila-ps/
+│
+├── config/                  # Configurações do projeto Django
+│   ├── settings.py          # Settings flexíveis (SQLite/PostgreSQL, Hosts, Estáticos, Hasher rápido)
+│   ├── urls.py              # Roteamento central (/admin-fila/, /painel/, /admin/, /api/)
+│   ├── wsgi.py / asgi.py
+│
+├── fila/                    # Aplicação principal
+│   ├── models.py            # Modelos: Paciente, Chamada, Sala e Medico
+│   ├── services.py          # Regras de negócio atômicas (FIFO, locks com select_for_update)
+│   ├── serializers.py       # Serializers DRF (proteção de dados LGPD)
+│   ├── views.py             # Views da API REST e TemplateViews do frontend
+│   ├── urls.py              # Rotas da API (/api/...)
+│   ├── admin.py             # Registro no Django Admin
+│   ├── tests.py             # Suíte de 28 testes automatizados
+│   └── migrations/          # Histórico de migrações do banco
+│
+├── templates/
+│   └── fila/
+│       ├── admin_fila.html  # Interface de recepção e triagem administrativa
+│       └── painel.html      # Interface pública de alto contraste para TV/sala de espera
+│
+├── static/                  # Arquivos estáticos adicionais
+├── requirements.txt         # Dependências do projeto
+├── .env.example             # Exemplo de variáveis de ambiente
+└── README.md                # Este documento
 ```
-config/          configurações do Django (settings por variável de ambiente)
-fila/
-  models.py      Paciente e Chamada
-  services.py    regras de negócio (cadastrar, remover, chamar próximo, estado do painel)
-  serializers.py entrada/saída da API (visão pública reduzida para LGPD)
-  views.py       endpoints
-  tests.py       testes automatizados
-```
 
-## Instalação
+---
 
-Requer Python 3.12 ou superior e Git.
+## 3. Instalação e Execução (Windows 11 / PowerShell)
 
-### Linux / macOS
+Requisitos: **Python 3.12 ou superior** e **Git**.
 
-```bash
-git clone <URL-DO-REPOSITORIO> fila-ps
-cd fila-ps
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py createsuperuser      # este é o usuário administrador
-```
+### 3.1 Configuração do Ambiente Virtual
 
-### Windows (PowerShell)
+Abra o terminal **PowerShell** no diretório do projeto:
 
 ```powershell
-git clone <URL-DO-REPOSITORIO> fila-ps
-cd fila-ps
+# 1. Se o PowerShell bloquear a execução de scripts do venv, rode:
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# 2. Crie e ative o ambiente virtual
 python -m venv venv
-venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1
+
+# 3. Instale as dependências
 pip install -r requirements.txt
+
+# 4. Aplique as migrações do banco de dados
 python manage.py migrate
+
+# 5. Crie o usuário administrador (recepção)
 python manage.py createsuperuser
 ```
 
-Se o PowerShell bloquear a ativação do venv, rode uma vez:
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+---
 
-## Executar em máquinas diferentes
+## 4. Executando em Duas ou Três Máquinas na Mesma Rede
 
-1. Descubra o IP do notebook que roda a API (`ip a` no Linux, `ipconfig` no Windows). Exemplo: `192.168.0.10`.
-2. Configure os hosts permitidos e, se o painel for uma página web em outra máquina, a origem dele:
+Para demonstrar a distribuição na banca com notebooks diferentes conectados ao mesmo Wi-Fi ou rede local:
 
-   **Linux / macOS**
-   ```bash
-   export DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1,192.168.0.10"
-   export CORS_ALLOWED_ORIGINS="http://192.168.0.20:8080"
-   ```
+### Passo 1: No Notebook do Servidor (Onde o Django roda)
 
-   **Windows (PowerShell)**
+1. Descubra o IP local da sua máquina:
    ```powershell
-   $env:DJANGO_ALLOWED_HOSTS = "localhost,127.0.0.1,192.168.0.10"
-   $env:CORS_ALLOWED_ORIGINS = "http://192.168.0.20:8080"
+   ipconfig
+   ```
+   Procure por **Endereço IPv4** do seu adaptador Wi-Fi ou Ethernet (exemplo: `192.168.1.15`).
+
+2. Liberar a porta 8000 no Firewall do Windows (se necessário):
+   ```powershell
+   New-NetFirewallRule -DisplayName "Django Fila PS" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
    ```
 
-3. Suba o servidor escutando em todas as interfaces:
-   ```bash
+3. Defina a variável `DJANGO_ALLOWED_HOSTS` incluindo seu IP e inicie o servidor:
+   ```powershell
+   $env:DJANGO_ALLOWED_HOSTS = "localhost,127.0.0.1,192.168.1.15"
    python manage.py runserver 0.0.0.0:8000
    ```
-4. Libere a porta 8000 no firewall do notebook, se necessário.
-5. Na outra máquina, teste: `http://192.168.0.10:8000/api/painel/`
 
-Todas as variáveis estão listadas em `.env.example`.
+---
 
-## Endpoints
+### Passo 2: No Notebook da Recepção (Administrador)
 
-| Método | Rota | Acesso | O que faz |
-|---|---|---|---|
-| POST | `/api/auth/token/` | público | login do administrador, devolve o token |
-| POST | `/api/pacientes/` | admin | cadastra paciente `{"nome": "..."}` |
-| GET | `/api/pacientes/` | admin | lista (filtro `?status=aguardando`) |
-| DELETE | `/api/pacientes/{id}/` | admin | remove da fila |
-| POST | `/api/chamar-proximo/` | admin | chama o próximo `{"sala": "3", "medico": "Dra. Helena"}` |
-| GET | `/api/painel/` | público, somente leitura | contagem, chamadas e `ultima_chamada_id` |
-
-O painel deve consultar `/api/painel/` e tocar o aviso sonoro quando o
-`ultima_chamada_id` mudar. O endpoint só mostra nome reduzido ("Maria S."),
-sala e médico.
-
-Também há a interface administrativa do Django em `/admin/`.
-
-### Exemplo de uso
-
-```bash
-# 1. login
-curl -X POST http://192.168.0.10:8000/api/auth/token/ -d "username=admin&password=SUA_SENHA"
-# 2. cadastrar
-curl -X POST http://192.168.0.10:8000/api/pacientes/ \
-  -H "Authorization: Token SEU_TOKEN" -H "Content-Type: application/json" \
-  -d '{"nome": "Maria da Silva"}'
-# 3. chamar o próximo
-curl -X POST http://192.168.0.10:8000/api/chamar-proximo/ \
-  -H "Authorization: Token SEU_TOKEN" -H "Content-Type: application/json" \
-  -d '{"sala": "3", "medico": "Dra. Helena"}'
-# 4. ver o painel (sem autenticação)
-curl http://192.168.0.10:8000/api/painel/
+Abra qualquer navegador e acesse:
+```text
+http://192.168.1.15:8000/admin-fila/
 ```
+- Faça login com o usuário e senha criados no `createsuperuser`.
+- O token é armazenado em `sessionStorage` e enviado no cabeçalho `Authorization: Token <key>`.
+- Permite cadastrar pacientes, visualizar a fila em ordem de chegada, remover desistentes e chamar o próximo.
 
-## Testes
+---
 
-```bash
+### Passo 3: No Notebook ou TV da Sala de Espera (Painel Público)
+
+Abra o navegador e acesse:
+```text
+http://192.168.1.15:8000/painel/
+```
+- Acesso público (sem login ou credenciais).
+- Clique no botão **"Ativar Som"** no canto superior direito para habilitar a Web Audio API (contornando a política de autoplay dos navegadores).
+- O painel consultará `/api/painel/` a cada 2,5 segundos e tocará o aviso sonoro e voz a cada nova chamada.
+
+---
+
+## 5. Endpoints e Rotas do Sistema
+
+### 5.1 Telas Web
+
+| Rota | Tipo | Acesso | Descrição |
+|---|---|---|---|
+| `/admin-fila/` | HTML/CSS/JS | Administrador (login por token) | Gestão da recepção: cadastro, fila FIFO, remoção e chamada. |
+| `/painel/` | HTML/CSS/JS | Público | Painel de TV: contagem, destaque do chamado, histórico, som e voz. |
+| `/admin/` | HTML (Django) | Superusuário | Gerenciamento administrativo nativo do Django (salas, médicos, etc.). |
+
+### 5.2 API REST (`/api/`)
+
+| Método | Rota | Autenticação | Descrição |
+|---|---|---|---|
+| **POST** | `/api/auth/token/` | Pública | Login do operador. Recebe `{"username": "...", "password": "..."}` e devolve o Token. |
+| **GET** | `/api/pacientes/` | Token Admin (`is_staff=True`) | Lista pacientes na fila (aceita `?status=aguardando`). |
+| **POST** | `/api/pacientes/` | Token Admin (`is_staff=True`) | Cadastra paciente: `{"nome": "Maria Silva"}`. |
+| **GET** | `/api/pacientes/{id}/` | Token Admin (`is_staff=True`) | Detalhes de um paciente específico. |
+| **DELETE** | `/api/pacientes/{id}/` | Token Admin (`is_staff=True`) | Remoção lógica (`status="removido"`). Retorna 204 ou 409 se já removido. |
+| **POST** | `/api/chamar-proximo/` | Token Admin (`is_staff=True`) | Chama o próximo da fila (FIFO): `{"sala": "Sala 1", "medico": "Dr. Carlos"}`. Retorna 404 se fila vazia. |
+| **GET** | `/api/recursos-atendimento/` | Token Admin (`is_staff=True`) | Lista de salas e médicos com `ativo=True` para os seletores. |
+| **GET** | `/api/painel/` | Pública (somente leitura) | Retorna contagem de aguardando, últimas chamadas (LGPD) e `ultima_chamada_id`. |
+
+---
+
+## 6. Roteiro de Demonstração para a Banca (Bloco 3)
+
+Siga este passo a passo durante a apresentação:
+
+1. **Demonstrar a Arquitetura Distribuída**:
+   - Mostre o terminal no Servidor rodando `python manage.py runserver 0.0.0.0:8000`.
+   - Abra a tela da recepção em `http://IP:8000/admin-fila/`.
+   - Abra a tela da sala de espera em `http://IP:8000/painel/` (em outra máquina ou aba).
+2. **Ativar o Áudio no Painel**:
+   - No painel, clique em **"Ativar Som"**. O botão ficará verde indicando `🔊 Som: Ativo`.
+3. **Cadastrar Pacientes**:
+   - Na recepção (`/admin-fila/`), faça login como administrador.
+   - Cadastre: "Carlos Eduardo Silva", "Beatriz Lima" e "Daniel Moreira".
+   - Veja que no painel a contagem de **"Pessoas Aguardando" sobe imediatamente para 3**.
+4. **Chamar o Próximo Paciente (Regra FIFO + Aviso Sonoro + LGPD)**:
+   - Na recepção, selecione a Sala e o Médico e clique em **"Chamar Próximo da Fila"**.
+   - Ouça o **aviso sonoro sintetizado** (dois tons harmônicos) e o anúncio em voz.
+   - No painel, verifique que o paciente chamado foi o primeiro a chegar ("Carlos S.") respeitando a disciplina FIFO e a LGPD.
+   - Veja a contagem de aguardando cair automaticamente para 2.
+5. **Remover Paciente Desistente**:
+   - Na recepção, clique em "Remover" ao lado de "Beatriz Lima".
+   - Veja a contagem no painel atualizar para 1 sem interrupções.
+6. **Esgotar a Fila e Testar Fila Vazia**:
+   - Chame o último paciente ("Daniel Moreira"). A contagem vai a 0.
+   - Tente clicar novamente em "Chamar Próximo da Fila": o sistema exibe aviso claro de **"Não há pacientes aguardando na fila"** (HTTP 404 tratado).
+7. **Demonstrar Segurança (Autenticação 401/403)**:
+   - Clique em "Sair" na recepção. O token é removido.
+   - Tente fazer chamadas via terminal sem token:
+     ```powershell
+     curl -X POST http://localhost:8000/api/chamar-proximo/ -H "Content-Type: application/json" -d "{\"sala\":\"1\",\"medico\":\"Dr. X\"}"
+     ```
+     O servidor recusa com **HTTP 401 Unauthorized**.
+8. **Demonstrar Robustez e Tolerância a Falhas de Rede**:
+   - No terminal do servidor, pressione `Ctrl + C` para derrubar temporariamente a aplicação.
+   - Observe o painel público:
+     - **Nunca apaga a tela** (mantém o último estado conhecido).
+     - Exibe aviso discreto no topo: `⚠️ Conexão perdida com o servidor. Mantendo último estado e tentando reconectar...`.
+     - Inicia a estratégia de **backoff exponencial** (2s $\to$ 4s $\to$ 8s $\to$ 15s) evitando sobrecarga de requisições.
+   - Reinicie o servidor (`python manage.py runserver 0.0.0.0:8000`).
+   - O painel detecta o retorno da conexão, oculta o aviso e sincroniza o estado **sem disparar alarmes falsos de chamadas antigas**.
+
+---
+
+## 7. Testes Automatizados
+
+O projeto possui **28 testes automatizados** cobrindo autenticação, permissões, privacidade LGPD, regras FIFO, integridade em concorrência e integridade das rotas web.
+
+Para executar os testes:
+```powershell
 python manage.py test
 ```
 
-## Fluxo de trabalho em grupo
+Saída esperada:
+```text
+Ran 28 tests in ~0.5s
+OK
+```
 
-- Cada integrante commita com o próprio usuário do Git (`git config user.name` / `user.email`),
-  pois o histórico precisa mostrar a contribuição de cada um.
-- Uma branch por funcionalidade (`git checkout -b feature/nome`), com merge na `main` por pull request.
+> **Otimização:** A suíte de testes utiliza hasher rápido (MD5) exclusivamente no ambiente de teste, reduzindo a execução de ~64 segundos para menos de 1 segundo.
 
-## Desvios em relação ao Bloco 1
+---
 
-(Registrar aqui qualquer diferença entre o que foi desenhado e o que foi implementado, com a justificativa.)
+## 8. Desvios em Relação ao Bloco 1
 
-| Desvio | Justificativa |
-|---|---|
-| | |
+| Componente / Decisão | Desenho Original (Bloco 1) | Implementação Real (Bloco 3) | Justificativa Técnica |
+|---|---|---|---|
+| **Banco de Dados** | PostgreSQL | **SQLite como padrão** (com suporte configurável a PostgreSQL via `.env`) | Garantir portabilidade imediata para execução e avaliação da banca em qualquer notebook sem dependência de containers Docker ou serviços PostgreSQL em execução no Windows. Suporte a PostgreSQL mantido por variáveis (`DB_ENGINE=postgresql`). |
+| **Comunicação em Tempo Real** | WebSockets / SSE | **Short Polling inteligente (2,5s)** com `AbortController` e Backoff | WebSockets exigem dependências adicionais (Daphne/Channels/Redis) e frequentemente enfrentam bloqueios em redes Wi-Fi acadêmicas e corporativas (proxies/firewalls). O polling a cada 2,5s atendeu perfeitamente ao requisito de atualização contínua, com baixo overhead e alta tolerância a falhas de rede. |
+| **Geração de Áudio** | Arquivos MP3/WAV estáticos | **Sintetizador Web Audio API puro + SpeechSynthesis** | Elimina dependência de arquivos externos no servidor, contorna limitações de codec e latência de rede em smart TVs, e adiciona acessibilidade por voz natural em português. |
+| **Catálogo de Recursos** | Textos livres em cada chamada | **Modelos `Sala` e `Medico` com seleção dinâmica** | Facilita a rotina da recepção através de seleção rápida das salas e médicos ativos da unidade, mantendo compatibilidade com digitação livre caso necessário. |

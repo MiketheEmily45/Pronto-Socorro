@@ -276,15 +276,20 @@ class ConcorrenciaTests(TransactionTestCase):
         bloqueios_ou_vazios = []
 
         def worker():
+            import time
             from django.db import connection, OperationalError
 
-            try:
-                ch = chamar_proximo(sala="Sala 1", medico="Dr. X")
-                resultados.append(ch.id)
-            except (FilaVaziaError, OperationalError) as err:
-                bloqueios_ou_vazios.append(type(err).__name__)
-            finally:
-                connection.close()
+            for _ in range(10):
+                try:
+                    ch = chamar_proximo(sala="Sala 1", medico="Dr. X")
+                    resultados.append(ch.id)
+                    break
+                except FilaVaziaError:
+                    bloqueios_ou_vazios.append("FilaVaziaError")
+                    break
+                except OperationalError:
+                    time.sleep(0.02)
+            connection.close()
 
         t1 = threading.Thread(target=worker)
         t2 = threading.Thread(target=worker)
