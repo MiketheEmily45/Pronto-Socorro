@@ -2,9 +2,731 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Painel de Chamadas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Chamadas — Sala de Espera</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #131b2e;
+      --surface-card: #1c2742;
+      --surface-border: #2e3d64;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --highlight: #22c55e;
+      --highlight-glow: rgba(34, 197, 94, 0.25);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.15);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      user-select: none;
+    }
+
+    /* Faixa de Aviso de Conexão Perdida */
+    #banner-desconectado {
+      display: none;
+      background: var(--danger-bg);
+      border-bottom: 2px solid var(--danger);
+      color: #fca5a5;
+      text-align: center;
+      padding: 0.65rem 1rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      animation: pulseAlert 2s infinite ease-in-out;
+    }
+
+    /* Cabeçalho da TV */
+    header {
+      background: var(--surface);
+      border-bottom: 2px solid var(--surface-border);
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .hospital-logo {
+      background: #0284c7;
+      color: white;
+      font-size: 1.75rem;
+      font-weight: 900;
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(2, 132, 199, 0.4);
+    }
+
+    .hospital-titulos h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    .hospital-titulos p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .header-controles {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    /* Botão de Ativação do Som */
+    .btn-som {
+      background: #334155;
+      color: #f1f5f9;
+      border: 2px solid #475569;
+      padding: 0.75rem 1.4rem;
+      border-radius: 9999px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-som:hover {
+      background: #475569;
+      transform: scale(1.02);
+    }
+
+    .btn-som.ativo {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: var(--highlight);
+      color: #4ade80;
+    }
+
+    .relogio {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.05em;
+    }
+
+    /* Conteúdo Principal */
+    main {
+      flex: 1;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 2.5rem;
+      max-width: 1920px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1100px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Coluna Esquerda: Chamada Atual em Grande Destaque */
+    .coluna-principal {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .card-chamada-atual {
+      background: linear-gradient(145deg, var(--surface) 0%, var(--surface-card) 100%);
+      border: 3px solid #0284c7;
+      border-radius: 24px;
+      padding: 3rem 2.5rem;
+      box-shadow: 0 10px 40px var(--accent-glow);
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-chamada-atual.animacao-nova-chamada {
+      animation: flashDestaque 1.8s ease-out;
+    }
+
+    .tag-chamada {
+      align-self: flex-start;
+      background: #0284c7;
+      color: white;
+      font-size: 1.3rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0.6rem 1.6rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .paciente-nome-destaque {
+      font-size: clamp(3.2rem, 6vw, 5.2rem);
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      word-break: break-word;
+    }
+
+    .detalhes-chamada-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 1.5rem;
+      background: rgba(10, 15, 29, 0.6);
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      padding: 1.75rem 2rem;
+    }
+
+    .detalhe-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .detalhe-rotulo {
+      font-size: 1.15rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .detalhe-valor-sala {
+      font-size: clamp(2.5rem, 4.5vw, 4rem);
+      font-weight: 900;
+      color: #38bdf8;
+    }
+
+    .detalhe-valor-medico {
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 800;
+      color: #f1f5f9;
+    }
+
+    /* Coluna Direita: Contagem de Espera & Histórico */
+    .coluna-secundaria {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* Card de Contagem de Aguardando */
+    .card-aguardando {
+      background: var(--surface);
+      border: 2px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .aguardando-info h3 {
+      font-size: 1.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .aguardando-info p {
+      font-size: 1.05rem;
+      color: #cbd5e1;
+      margin-top: 0.3rem;
+    }
+
+    .aguardando-numero {
+      font-size: clamp(3.5rem, 6vw, 5rem);
+      font-weight: 900;
+      color: var(--highlight);
+      line-height: 1;
+      text-shadow: 0 0 25px var(--highlight-glow);
+    }
+
+    /* Card de Histórico Recente */
+    .card-historico {
+      background: var(--surface);
+      border: 2px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 2rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .historico-cabecalho {
+      font-size: 1.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 800;
+      border-bottom: 2px solid var(--surface-border);
+      padding-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .historico-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow-y: auto;
+    }
+
+    .historico-item {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      transition: transform 0.15s ease;
+    }
+
+    .historico-paciente {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .historico-detalhes {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    .historico-sala-badge {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid #0284c7;
+      color: #38bdf8;
+      font-size: 1.25rem;
+      font-weight: 800;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+
+    .sem-chamadas {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+      font-size: 1.3rem;
+    }
+
+    /* Animações */
+    @keyframes flashDestaque {
+      0% {
+        box-shadow: 0 0 0 10px rgba(56, 189, 248, 0.8), 0 0 80px rgba(56, 189, 248, 0.9);
+        border-color: #ffffff;
+        transform: scale(1.02);
+      }
+      50% {
+        box-shadow: 0 0 0 20px rgba(56, 189, 248, 0.4), 0 0 60px rgba(56, 189, 248, 0.6);
+      }
+      100% {
+        box-shadow: 0 10px 40px var(--accent-glow);
+        border-color: #0284c7;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Painel de Chamadas</h1>
+
+  <!-- Banner de Perda de Conexão (Mostrado discretamente sem limpar a tela) -->
+  <div id="banner-desconectado">
+    ⚠️ Conexão perdida com o servidor. Mantendo último estado e tentando reconectar...
+  </div>
+
+  <!-- Cabeçalho do Painel -->
+  <header>
+    <div class="header-info">
+      <div class="hospital-logo">PS</div>
+      <div class="hospital-titulos">
+        <h1>PRONTO-SOCORRO</h1>
+        <p>Painel de Atendimento da Sala de Espera</p>
+      </div>
+    </div>
+    <div class="header-controles">
+      <button class="btn-som" id="btn-som" onclick="alternarSom()">
+        <span id="icone-som">🔇</span>
+        <span id="rotulo-som">Ativar Som</span>
+      </button>
+      <div class="relogio" id="relogio">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- Conteúdo Principal -->
+  <main>
+    <!-- Coluna Esquerda: Chamada Atual em Grande Destaque -->
+    <section class="coluna-principal">
+      <div class="card-chamada-atual" id="card-chamada-atual">
+        <div class="tag-chamada">
+          <span>📢</span> CHAMANDO AGORA
+        </div>
+
+        <div class="paciente-nome-destaque" id="destaque-paciente">
+          Aguardando Chamada...
+        </div>
+
+        <div class="detalhes-chamada-grid">
+          <div class="detalhe-item">
+            <span class="detalhe-rotulo">Sala / Consultório</span>
+            <span class="detalhe-valor-sala" id="destaque-sala">-</span>
+          </div>
+          <div class="detalhe-item">
+            <span class="detalhe-rotulo">Médico Responsável</span>
+            <span class="detalhe-valor-medico" id="destaque-medico">-</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Coluna Direita: Quantidade de Espera & Histórico Recente -->
+    <section class="coluna-secundaria">
+      <!-- Card da Fila de Espera -->
+      <div class="card-aguardando">
+        <div class="aguardando-info">
+          <h3>Pessoas Aguardando</h3>
+          <p>Pacientes na triagem e recepção</p>
+        </div>
+        <div class="aguardando-numero" id="numero-aguardando">0</div>
+      </div>
+
+      <!-- Histórico de Chamadas Anteriores -->
+      <div class="card-historico">
+        <div class="historico-cabecalho">
+          <span>Últimas Chamadas</span>
+          <span style="font-size: 0.95rem; font-weight: 600; color: #64748b;">Recentes</span>
+        </div>
+        <div class="historico-lista" id="lista-historico">
+          <div class="sem-chamadas">Nenhuma chamada anterior.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /**
+     * Painel Público de Chamadas — Sala de Espera
+     * - Consome GET /api/painel/ via caminhos relativos
+     * - Atualização por polling a cada 2.5 segundos
+     * - Sintetizador Web Audio API puro (sem arquivos de áudio externos)
+     * - Disparo sonoro apenas quando ultima_chamada_id for MAIOR que o visto antes
+     * - Reconexão robusta com AbortController e backoff exponencial (2s, 4s, 8s até 15s)
+     * - Mantém o último estado na tela e nunca apaga nada em falhas de rede
+     */
+
+    // --- Estado da Aplicação ---
+    let ultimoChamadaIdConhecido = null;
+    let primeiraCarga = true;
+    let somHabilitado = false;
+    let audioCtx = null;
+
+    // Controle de Backoff e Polling
+    let backoffAtualMs = 2500;
+    const POLLING_PADRAO_MS = 2500;
+    const BACKOFF_MAX_MS = 15000;
+    let timerPolling = null;
+
+    // --- Relógio Digital ---
+    function atualizarRelogio() {
+      const agora = new Date();
+      document.getElementById("relogio").textContent = agora.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+    setInterval(atualizarRelogio, 1000);
+    atualizarRelogio();
+
+    // --- Web Audio API (Sintetizador de Campainha Hospitalar) ---
+    function inicializarAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+    }
+
+    function alternarSom() {
+      inicializarAudioContext();
+      somHabilitado = !somHabilitado;
+      atualizarBotaoSom();
+
+      // Ao ativar, toca um tom sutil de teste e confirmação
+      if (somHabilitado) {
+        tocarSinalSonoro(true);
+      }
+    }
+
+    function atualizarBotaoSom() {
+      const btn = document.getElementById("btn-som");
+      const icone = document.getElementById("icone-som");
+      const rotulo = document.getElementById("rotulo-som");
+
+      if (somHabilitado) {
+        btn.classList.add("ativo");
+        icone.textContent = "🔊";
+        rotulo.textContent = "Som: Ativo";
+      } else {
+        btn.classList.remove("ativo");
+        icone.textContent = "🔇";
+        rotulo.textContent = "Ativar Som";
+      }
+    }
+
+    /**
+     * Toca um chime hospitalar (dois tons senoidais harmônicos: 587Hz D5 -> 880Hz A5)
+     */
+    function tocarSinalSonoro(teste = false) {
+      if (!somHabilitado) return;
+      inicializarAudioContext();
+      if (!audioCtx) return;
+
+      try {
+        const agora = audioCtx.currentTime;
+
+        // Tom 1
+        const osc1 = audioCtx.createOscillator();
+        const ganho1 = audioCtx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(587.33, agora); // D5
+        ganho1.gain.setValueAtTime(0.35, agora);
+        ganho1.gain.exponentialRampToValueAtTime(0.001, agora + 0.6);
+        osc1.connect(ganho1);
+        ganho1.connect(audioCtx.destination);
+        osc1.start(agora);
+        osc1.stop(agora + 0.6);
+
+        // Tom 2 (pouco depois, mais agudo)
+        const osc2 = audioCtx.createOscillator();
+        const ganho2 = audioCtx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(880.00, agora + 0.22); // A5
+        ganho2.gain.setValueAtTime(0.35, agora + 0.22);
+        ganho2.gain.exponentialRampToValueAtTime(0.001, agora + 0.9);
+        osc2.connect(ganho2);
+        ganho2.connect(audioCtx.destination);
+        osc2.start(agora + 0.22);
+        osc2.stop(agora + 0.9);
+      } catch (e) {
+        console.warn("Erro ao sintetizar áudio:", e);
+      }
+    }
+
+    /**
+     * Anúncio por voz complementar (SpeechSynthesis pt-BR)
+     */
+    function anunciarVoz(paciente, sala, medico) {
+      if (!somHabilitado || !window.speechSynthesis) return;
+      try {
+        window.speechSynthesis.cancel();
+        const texto = `Atenção: ${paciente}, comparecer à sala ${sala}, com ${medico}.`;
+        const fala = new SpeechSynthesisUtterance(texto);
+        fala.lang = "pt-BR";
+        fala.rate = 0.95;
+        fala.pitch = 1.0;
+        // Aguarda término do chime para iniciar a fala
+        setTimeout(() => {
+          window.speechSynthesis.speak(fala);
+        }, 700);
+      } catch (e) {
+        console.warn("Erro ao sintetizar fala:", e);
+      }
+    }
+
+    // --- Atualização Visual da Tela ---
+    function animarDestaque() {
+      const card = document.getElementById("card-chamada-atual");
+      card.classList.remove("animacao-nova-chamada");
+      void card.offsetWidth; // Força reflow para reiniciar animação CSS
+      card.classList.add("animacao-nova-chamada");
+    }
+
+    function renderizarPainel(dados) {
+      // 1. Contagem de Aguardando
+      document.getElementById("numero-aguardando").textContent = dados.aguardando ?? 0;
+
+      const chamadas = dados.chamadas || [];
+
+      // 2. Chamada em Destaque (a primeira da lista é a mais recente)
+      if (chamadas.length > 0) {
+        const atual = chamadas[0];
+        document.getElementById("destaque-paciente").textContent = atual.paciente;
+        document.getElementById("destaque-sala").textContent = `Sala ${atual.sala}`;
+        document.getElementById("destaque-medico").textContent = atual.medico;
+
+        // 3. Histórico das Chamadas Anteriores (a partir do índice 1)
+        const anteriores = chamadas.slice(1);
+        const listaHistorico = document.getElementById("lista-historico");
+
+        if (anteriores.length === 0) {
+          listaHistorico.innerHTML = '<div class="sem-chamadas">Nenhuma chamada anterior.</div>';
+        } else {
+          listaHistorico.innerHTML = "";
+          anteriores.forEach(c => {
+            const item = document.createElement("div");
+            item.className = "historico-item";
+            const hora = new Date(c.chamada_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+            item.innerHTML = `
+              <div>
+                <div class="historico-paciente">${escaparHtml(c.paciente)}</div>
+                <div class="historico-detalhes">${escaparHtml(c.medico)} • ${hora}</div>
+              </div>
+              <div class="historico-sala-badge">Sala ${escaparHtml(c.sala)}</div>
+            `;
+            listaHistorico.appendChild(item);
+          });
+        }
+      } else {
+        document.getElementById("destaque-paciente").textContent = "Aguardando Chamada...";
+        document.getElementById("destaque-sala").textContent = "-";
+        document.getElementById("destaque-medico").textContent = "-";
+        document.getElementById("lista-historico").innerHTML = '<div class="sem-chamadas">Nenhuma chamada registrada.</div>';
+      }
+    }
+
+    function escaparHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // --- Polling com Robustez, Timeout e Backoff ---
+    async function consultarPainel() {
+      const banner = document.getElementById("banner-desconectado");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // Timeout de 4 segundos
+
+      try {
+        const resposta = await fetch("/api/painel/", {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!resposta.ok) {
+          throw new Error(`Servidor respondeu com status ${resposta.status}`);
+        }
+
+        const dados = await resposta.json();
+
+        // Conexão bem-sucedida: esconde banner e reseta backoff para 2.5s
+        banner.style.display = "none";
+        backoffAtualMs = POLLING_PADRAO_MS;
+
+        const novoId = dados.ultima_chamada_id;
+
+        // Lógica do Som:
+        // - Na primeira carga: NÃO toca som, apenas registra o ID atual.
+        // - Nas cargas subsequentes: toca SE E SOMENTE SE novoId for maior que o anterior conhecido.
+        if (primeiraCarga) {
+          primeiraCarga = false;
+          ultimoChamadaIdConhecido = novoId;
+          renderizarPainel(dados);
+        } else {
+          const houveNovaChamada = novoId !== null && (
+            ultimoChamadaIdConhecido === null || novoId > ultimoChamadaIdConhecido
+          );
+
+          if (houveNovaChamada) {
+            ultimoChamadaIdConhecido = novoId;
+            renderizarPainel(dados);
+            animarDestaque();
+            tocarSinalSonoro();
+            if (dados.chamadas && dados.chamadas.length > 0) {
+              const ult = dados.chamadas[0];
+              anunciarVoz(ult.paciente, ult.sala, ult.medico);
+            }
+          } else {
+            // Atualiza apenas dados sem tocar som (ex: contagem de aguardando mudou)
+            renderizarPainel(dados);
+            if (novoId !== null) {
+              ultimoChamadaIdConhecido = novoId;
+            }
+          }
+        }
+
+      } catch (erro) {
+        // Erro de rede ou Timeout:
+        // Mantém todo o estado visual na tela e exibe aviso discreto
+        banner.style.display = "block";
+
+        // Aplica backoff exponencial: 2s -> 4s -> 8s -> máx 15s
+        backoffAtualMs = Math.min(backoffAtualMs * 2, BACKOFF_MAX_MS);
+        console.warn(`[Painel] Falha na consulta (${erro.message}). Próxima tentativa em ${backoffAtualMs / 1000}s`);
+      } finally {
+        // Agenda o próximo ciclo com o intervalo atual
+        timerPolling = setTimeout(consultarPainel, backoffAtualMs);
+      }
+    }
+
+    // Inicialização ao carregar a página
+    document.addEventListener("DOMContentLoaded", () => {
+      consultarPainel();
+    });
+  </script>
 </body>
 </html>
