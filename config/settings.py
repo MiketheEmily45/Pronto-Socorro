@@ -7,6 +7,7 @@ vêm de variáveis de ambiente. Veja o arquivo .env.example.
 
 import os
 from pathlib import Path
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -63,7 +64,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -78,14 +79,28 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # --- Banco de dados --------------------------------------------------------
-# SQLite para começar. Se a arquitetura pedir PostgreSQL, só esta seção muda.
+# SQLite é o padrão. PostgreSQL configurável por variável de ambiente (DB_ENGINE=postgresql).
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+DB_ENGINE = os.environ.get("DB_ENGINE", "sqlite3").lower()
+
+if DB_ENGINE in ("postgres", "postgresql", "django.db.backends.postgresql"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME", "fila_ps"),
+            "USER": os.environ.get("DB_USER", "postgres"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -93,6 +108,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+# Hasher rápido para suíte de testes (evita lentidão de PBKDF2 em dezenas de testes)
+TESTING = "test" in sys.argv
+if TESTING:
+    PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+    ]
 
 # --- Internacionalização ---------------------------------------------------
 
@@ -102,6 +124,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Django REST Framework -------------------------------------------------
