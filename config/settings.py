@@ -29,7 +29,7 @@ SECRET_KEY = os.environ.get(
 DEBUG = env_bool("DJANGO_DEBUG", True)
 
 # Lista separada por vírgulas. Ex.: "localhost,127.0.0.1,192.168.0.10"
-ALLOWED_HOSTS = env_lista("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+ALLOWED_HOSTS = env_lista("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 
 # --- Aplicações ------------------------------------------------------------
 

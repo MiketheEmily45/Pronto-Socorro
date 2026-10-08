@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administração da Fila — Pronto-Socorro</title>
+  <style>
+    :root {
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --primary-light: #ccfbf1;
+      --secondary: #0369a1;
+      --secondary-hover: #075985;
+      --danger: #b91c1c;
+      --danger-hover: #991b1b;
+      --danger-light: #fee2e2;
+      --success: #15803d;
+      --success-light: #dcfce7;
+      --warning: #b45309;
+      --warning-light: #fef3c7;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Barra Superior */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      background: var(--primary);
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.25rem;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .badge-user {
+      background: var(--primary-light);
+      color: var(--primary-hover);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Container Principal */
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Alertas */
+    #notificacao {
+      display: none;
+      padding: 0.85rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      animation: fadeIn 0.3s ease;
+    }
+
+    #notificacao.success {
+      display: block;
+      background: var(--success-light);
+      color: var(--success);
+      border: 1px solid #86efac;
+    }
+
+    #notificacao.error {
+      display: block;
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #fca5a5;
+    }
+
+    #notificacao.warning {
+      display: block;
+      background: var(--warning-light);
+      color: var(--warning);
+      border: 1px solid #fde68a;
+    }
+
+    /* Cards de Métricas */
+    .metricas-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .card-metrica {
+      background: var(--surface);
+      padding: 1.25rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .card-metrica-titulo {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .card-metrica-valor {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .card-metrica-detalhe {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Layout em Grade: Ações e Fila */
+    .painel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.3fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .painel-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.05);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Formulários e Entradas */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: white;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+    }
+
+    /* Botões */
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: var(--secondary);
+      color: white;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--secondary-hover);
+    }
+
+    .btn-danger {
+      background: var(--danger-light);
+      color: var(--danger);
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: #f1f5f9;
+    }
+
+    .btn-sm {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.8rem;
+    }
+
+    .btn-large {
+      padding: 0.9rem 1.5rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    /* Fila de Pacientes */
+    .fila-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 480px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .fila-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.85rem 1rem;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+
+    .fila-item:hover {
+      background: #f1f5f9;
+    }
+
+    .fila-item-posicao {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--primary);
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-light);
+      border-radius: 50%;
+    }
+
+    .fila-item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      flex: 1;
+      margin-left: 0.75rem;
+    }
+
+    .fila-item-nome {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text);
+    }
+
+    .fila-item-chegada {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .fila-vazia {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Histórico de Chamadas */
+    .historico-tabela {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .historico-tabela th, .historico-tabela td {
+      padding: 0.65rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .historico-tabela th {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    /* Modal de Login */
+    #login-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1.5rem;
+    }
+
+    .login-card {
+      background: white;
+      width: 100%;
+      max-width: 420px;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: zoomIn 0.2s ease-out;
+    }
+
+    .login-header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .login-badge {
+      background: var(--primary);
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 800;
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-erro {
+      display: none;
+      background: var(--danger-light);
+      color: var(--danger);
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border: 1px solid #fca5a5;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes zoomIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra Superior -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">PS</div>
+      <div>
+        <h1 class="brand-title">Fila de Pronto-Socorro</h1>
+        <p class="brand-subtitle">Recepção & Triagem Administrativa</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="badge-user" id="badge-usuario">🔒 Sessão ativa</span>
+      <a href="/painel/" target="_blank" class="btn-outline btn-sm" title="Abrir Painel Público em nova aba">📺 Ver Painel</a>
+      <button class="btn-outline btn-sm" id="btn-sair" onclick="fazerLogout()">Sair</button>
+    </div>
+  </header>
+
+  <!-- Conteúdo Principal -->
+  <main>
+    <!-- Área de Notificações / Alertas -->
+    <div id="notificacao" role="alert"></div>
+
+    <!-- Cards de Métricas -->
+    <section class="metricas-grid">
+      <div class="card-metrica">
+        <span class="card-metrica-titulo">Aguardando Atendimento</span>
+        <span class="card-metrica-valor" id="metrica-aguardando">-</span>
+        <span class="card-metrica-detalhe">Pacientes na fila neste momento</span>
+      </div>
+      <div class="card-metrica">
+        <span class="card-metrica-titulo">Última Chamada Realizada</span>
+        <span class="card-metrica-valor" style="font-size: 1.35rem;" id="metrica-ultima-chamada">-</span>
+        <span class="card-metrica-detalhe" id="metrica-ultima-sala-medico">Nenhuma chamada recente</span>
+      </div>
+      <div class="card-metrica">
+        <span class="card-metrica-titulo">Disciplina da Fila</span>
+        <span class="card-metrica-valor" style="font-size: 1.5rem; color: var(--primary);">FIFO</span>
+        <span class="card-metrica-detalhe">Primeiro que chega é o primeiro chamado</span>
+      </div>
+    </section>
+
+    <!-- Grid Principal: Ações & Fila -->
+    <div class="painel-grid">
+      <!-- Coluna da Esquerda: Ações de Gestão -->
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Card 1: Chamar Próximo Paciente -->
+        <div class="card" style="border-top: 4px solid var(--secondary);">
+          <div class="card-header">
+            <h2 class="card-title">📢 Chamar Próximo Paciente</h2>
+          </div>
+          <p style="font-size: 0.9rem; color: var(--text-muted);">
+            Seleciona automaticamente o paciente há mais tempo aguardando e direciona ao consultório.
+          </p>
+          <form id="form-chamar" onsubmit="event.preventDefault(); chamarProximo();">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+              <div class="form-group">
+                <label for="select-sala">Sala / Consultório *</label>
+                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <select id="select-sala" required onchange="aoMudarSelectSala(this)">
+                    <option value="">Carregando salas...</option>
+                  </select>
+                  <input type="text" id="input-sala-personalizada" placeholder="Ou digite outra sala..." style="display: none;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="select-medico">Médico de Plantão *</label>
+                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                  <select id="select-medico" required onchange="aoMudarSelectMedico(this)">
+                    <option value="">Carregando médicos...</option>
+                  </select>
+                  <input type="text" id="input-medico-personalizado" placeholder="Ou digite outro médico..." style="display: none;">
+                </div>
+              </div>
+            </div>
+            <button type="submit" class="btn-secondary btn-large" id="btn-chamar-proximo" style="width: 100%;">
+              Chamar Próximo da Fila
+            </button>
+          </form>
+        </div>
+
+        <!-- Card 2: Cadastrar Paciente -->
+        <div class="card" style="border-top: 4px solid var(--primary);">
+          <div class="card-header">
+            <h2 class="card-title">➕ Cadastrar Paciente na Fila</h2>
+          </div>
+          <form id="form-cadastrar" onsubmit="event.preventDefault(); cadastrarPaciente();">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label for="input-nome">Nome Completo do Paciente *</label>
+              <input type="text" id="input-nome" placeholder="Ex.: Maria da Silva Santos" required autocomplete="off">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">
+                LGPD: O painel público exibirá apenas o primeiro nome e a inicial (ex.: Maria S.).
+              </span>
+            </div>
+            <button type="submit" class="btn-primary" id="btn-cadastrar-paciente" style="width: 100%;">
+              Inserir Paciente na Fila
+            </button>
+          </form>
+        </div>
+
+        <!-- Card 3: Histórico Recente de Chamadas -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">🕒 Últimas Chamadas</h2>
+            <button type="button" class="btn-outline btn-sm" onclick="carregarDados()">Atualizar</button>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="historico-tabela">
+              <thead>
+                <tr>
+                  <th>Paciente (Público)</th>
+                  <th>Sala</th>
+                  <th>Médico</th>
+                  <th>Horário</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-historico">
+                <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhuma chamada registrada.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Coluna da Direita: Fila de Espera (FIFO) -->
+      <div class="card" style="height: fit-content;">
+        <div class="card-header">
+          <h2 class="card-title">📋 Fila de Espera (Ordem de Chegada)</h2>
+          <span class="badge-user" id="badge-total-fila">0 na fila</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">
+          Pacientes ordenados pelo horário de cadastro. O primeiro da lista é o próximo a ser chamado.
+        </p>
+        
+        <div class="fila-container" id="lista-fila">
+          <div class="fila-vazia">Carregando fila...</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal / Overlay de Login com Token -->
+  <div id="login-overlay" style="display: none;">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-badge">PS</div>
+        <h2 style="font-size: 1.35rem; color: var(--text);">Acesso Administrativo</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">
+          Informe as credenciais de administrador da recepção.
+        </p>
+      </div>
+
+      <div class="login-erro" id="login-erro"></div>
+
+      <form id="form-login" onsubmit="event.preventDefault(); fazerLogin();" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="form-group">
+          <label for="login-usuario">Usuário</label>
+          <input type="text" id="login-usuario" required autocomplete="username" placeholder="admin">
+        </div>
+        <div class="form-group">
+          <label for="login-senha">Senha</label>
+          <input type="password" id="login-senha" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn-primary" id="btn-entrar" style="margin-top: 0.5rem;">
+          Entrar no Sistema
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Script Administrativo da Fila de Pronto-Socorro
+     * Todas as requisições utilizam caminhos relativos (/api/...)
+     * Autenticação via Token armazenado em sessionStorage
+     */
+
+    const STORAGE_KEY = "ps_auth_token";
+    const USERNAME_KEY = "ps_auth_username";
+
+    // --- Gerenciamento de Sessão e Token ---
+
+    function obterToken() {
+      return sessionStorage.getItem(STORAGE_KEY);
+    }
+
+    function salvarSessao(token, username) {
+      sessionStorage.setItem(STORAGE_KEY, token);
+      if (username) sessionStorage.setItem(USERNAME_KEY, username);
+    }
+
+    function limparSessao() {
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(USERNAME_KEY);
+    }
+
+    function verificarAutenticacao() {
+      const token = obterToken();
+      const overlay = document.getElementById("login-overlay");
+      const badge = document.getElementById("badge-usuario");
+
+      if (!token) {
+        overlay.style.display = "flex";
+        badge.textContent = "Não autenticado";
+        return false;
+      }
+
+      overlay.style.display = "none";
+      const user = sessionStorage.getItem(USERNAME_KEY) || "admin";
+      badge.textContent = `👤 ${user}`;
+      return true;
+    }
+
+    function fazerLogout() {
+      limparSessao();
+      exibirNotificacao("Você saiu do sistema.", "warning");
+      verificarAutenticacao();
+    }
+
+    // --- Notificações em Tela ---
+    let timeoutNotificacao = null;
+    function exibirNotificacao(texto, tipo = "success") {
+      const el = document.getElementById("notificacao");
+      el.className = tipo;
+      el.textContent = texto;
+      el.style.display = "block";
+      clearTimeout(timeoutNotificacao);
+      timeoutNotificacao = setTimeout(() => {
+        el.style.display = "none";
+      }, 5000);
+    }
+
+    // --- Requisição Autenticada com Tratamento de 401/403 ---
+    async function requisicaoApi(url, opcoes = {}) {
+      const token = obterToken();
+      const headers = {
+        "Accept": "application/json",
+        ...(opcoes.headers || {})
+      };
+
+      if (token) {
+        headers["Authorization"] = `Token ${token}`;
+      }
+
+      if (opcoes.body && typeof opcoes.body === "object" && !(opcoes.body instanceof FormData)) {
+        headers["Content-Type"] = "application/json";
+        opcoes.body = JSON.stringify(opcoes.body);
+      }
+
+      const resposta = await fetch(url, { ...opcoes, credentials: "same-origin", headers });
+
+      if (resposta.status === 401 || resposta.status === 403) {
+        limparSessao();
+        verificarAutenticacao();
+        const erroMsg = document.getElementById("login-erro");
+        erroMsg.textContent = "Sessão expirada ou sem permissão de administrador. Faça login novamente.";
+        erroMsg.style.display = "block";
+        throw new Error("Não autorizado");
+      }
+
+      return resposta;
+    }
+
+    // --- Login ---
+    async function fazerLogin() {
+      const btn = document.getElementById("btn-entrar");
+      const erroBox = document.getElementById("login-erro");
+      const usuario = document.getElementById("login-usuario").value.trim();
+      const senha = document.getElementById("login-senha").value;
+
+      erroBox.style.display = "none";
+      btn.disabled = true;
+      btn.textContent = "Entrando...";
+
+      try {
+        const resp = await fetch("/api/auth/token/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ username: usuario, password: senha })
+        });
+
+        if (!resp.ok) {
+          const dados = await resp.json().catch(() => ({}));
+          const msg = dados.non_field_errors?.[0] || dados.detail || "Usuário ou senha inválidos.";
+          erroBox.textContent = msg;
+          erroBox.style.display = "block";
+          return;
+        }
+
+        const dados = await resp.json();
+        salvarSessao(dados.token, usuario);
+        verificarAutenticacao();
+        exibirNotificacao(`Bem-vindo, ${usuario}!`, "success");
+        await inicializarDados();
+      } catch (e) {
+        erroBox.textContent = "Erro de conexão ao tentar fazer login.";
+        erroBox.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Entrar no Sistema";
+      }
+    }
+
+    // --- Carregamento de Recursos (Salas e Médicos) ---
+    async function carregarRecursos() {
+      try {
+        const resp = await requisicaoApi("/api/recursos-atendimento/");
+        if (!resp.ok) return;
+        const dados = await resp.json();
+
+        const selectSala = document.getElementById("select-sala");
+        const selectMedico = document.getElementById("select-medico");
+
+        selectSala.innerHTML = '<option value="">-- Selecione uma Sala --</option>';
+        if (dados.salas && dados.salas.length > 0) {
+          dados.salas.forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s.nome;
+            opt.textContent = s.nome;
+            selectSala.appendChild(opt);
+          });
+        }
+        selectSala.innerHTML += '<option value="__OUTRA__">+ Digitar outra sala...</option>';
+
+        selectMedico.innerHTML = '<option value="">-- Selecione um Médico --</option>';
+        if (dados.medicos && dados.medicos.length > 0) {
+          dados.medicos.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.nome;
+            opt.textContent = m.nome;
+            selectMedico.appendChild(opt);
+          });
+        }
+        selectMedico.innerHTML += '<option value="__OUTRO__">+ Digitar outro médico...</option>';
+      } catch (e) {
+        // Ignora se não autenticado
+      }
+    }
+
+    function aoMudarSelectSala(sel) {
+      const inputOutra = document.getElementById("input-sala-personalizada");
+      if (sel.value === "__OUTRA__") {
+        inputOutra.style.display = "block";
+        inputOutra.required = true;
+        inputOutra.focus();
+      } else {
+        inputOutra.style.display = "none";
+        inputOutra.required = false;
+      }
+    }
+
+    function aoMudarSelectMedico(sel) {
+      const inputOutro = document.getElementById("input-medico-personalizado");
+      if (sel.value === "__OUTRO__") {
+        inputOutro.style.display = "block";
+        inputOutro.required = true;
+        inputOutro.focus();
+      } else {
+        inputOutro.style.display = "none";
+        inputOutro.required = false;
+      }
+    }
+
+    function obterSalaSelecionada() {
+      const sel = document.getElementById("select-sala");
+      if (sel.value === "__OUTRA__") {
+        return document.getElementById("input-sala-personalizada").value.trim();
+      }
+      return sel.value;
+    }
+
+    function obterMedicoSelecionado() {
+      const sel = document.getElementById("select-medico");
+      if (sel.value === "__OUTRO__") {
+        return document.getElementById("input-medico-personalizado").value.trim();
+      }
+      return sel.value;
+    }
+
+    // --- Carregamento da Fila e Estado ---
+    async function carregarFila() {
+      try {
+        const resp = await requisicaoApi("/api/pacientes/?status=aguardando");
+        if (!resp.ok) return;
+        const pacientes = await resp.json();
+
+        const lista = document.getElementById("lista-fila");
+        const badgeFila = document.getElementById("badge-total-fila");
+        const metricaAguardando = document.getElementById("metrica-aguardando");
+
+        badgeFila.textContent = `${pacientes.length} na fila`;
+        metricaAguardando.textContent = pacientes.length;
+
+        if (pacientes.length === 0) {
+          lista.innerHTML = '<div class="fila-vazia">Nenhum paciente aguardando no momento.</div>';
+          return;
+        }
+
+        lista.innerHTML = "";
+        pacientes.forEach((p, idx) => {
+          const item = document.createElement("div");
+          item.className = "fila-item";
+
+          const dataChegada = new Date(p.chegada_em);
+          const horaFmt = dataChegada.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+          item.innerHTML = `
+            <div class="fila-item-posicao">${idx + 1}</div>
+            <div class="fila-item-info">
+              <span class="fila-item-nome">${escaparHtml(p.nome)}</span>
+              <span class="fila-item-chegada">Chegada: ${horaFmt}</span>
+            </div>
+            <button class="btn-danger btn-sm" onclick="removerPaciente(${p.id}, '${escaparHtml(p.nome)}')">
+              Remover
+            </button>
+          `;
+          lista.appendChild(item);
+        });
+      } catch (e) {
+        // Trata erro de rede silenciosamente para polling
+      }
+    }
+
+    // --- Carregamento do Painel (para Histórico e Métricas) ---
+    async function carregarPainel() {
+      try {
+        const resp = await fetch("/api/painel/");
+        if (!resp.ok) return;
+        const dados = await resp.json();
+
+        // Atualiza última chamada no card
+        const metricaUltima = document.getElementById("metrica-ultima-chamada");
+        const metricaDetalhe = document.getElementById("metrica-ultima-sala-medico");
+
+        if (dados.chamadas && dados.chamadas.length > 0) {
+          const ult = dados.chamadas[0];
+          metricaUltima.textContent = ult.paciente;
+          metricaDetalhe.textContent = `Sala ${ult.sala} • ${ult.medico}`;
+        } else {
+          metricaUltima.textContent = "-";
+          metricaDetalhe.textContent = "Nenhuma chamada recente";
+        }
+
+        // Atualiza tabela de histórico
+        const tabela = document.getElementById("tabela-historico");
+        if (!dados.chamadas || dados.chamadas.length === 0) {
+          tabela.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Nenhuma chamada registrada.</td></tr>';
+          return;
+        }
+
+        tabela.innerHTML = "";
+        dados.chamadas.forEach(c => {
+          const row = document.createElement("tr");
+          const hora = new Date(c.chamada_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+          row.innerHTML = `
+            <td style="font-weight: 600;">${escaparHtml(c.paciente)}</td>
+            <td>Sala ${escaparHtml(c.sala)}</td>
+            <td>${escaparHtml(c.medico)}</td>
+            <td style="color: var(--text-muted);">${hora}</td>
+          `;
+          tabela.appendChild(row);
+        });
+      } catch (e) {}
+    }
+
+    async function carregarDados() {
+      if (!obterToken()) return;
+      await Promise.all([carregarFila(), carregarPainel()]);
+    }
+
+    // --- Ações: Cadastrar Paciente ---
+    async function cadastrarPaciente() {
+      const btn = document.getElementById("btn-cadastrar-paciente");
+      const input = document.getElementById("input-nome");
+      const nome = input.value.trim();
+
+      if (!nome) {
+        exibirNotificacao("Por favor, informe o nome do paciente.", "error");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Cadastrando...";
+
+      try {
+        const resp = await requisicaoApi("/api/pacientes/", {
+          method: "POST",
+          body: { nome }
+        });
+
+        if (resp.status === 201) {
+          const novo = await resp.json();
+          exibirNotificacao(`Paciente "${novo.nome}" cadastrado com sucesso!`, "success");
+          input.value = "";
+          input.focus();
+          await carregarDados();
+        } else {
+          const erro = await resp.json().catch(() => ({}));
+          exibirNotificacao(erro.nome?.[0] || "Falha ao cadastrar paciente.", "error");
+        }
+      } catch (e) {
+        if (e.message !== "Não autorizado") {
+          exibirNotificacao("Erro de comunicação ao cadastrar paciente.", "error");
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Inserir Paciente na Fila";
+      }
+    }
+
+    // --- Ações: Chamar Próximo Paciente ---
+    async function chamarProximo() {
+      const btn = document.getElementById("btn-chamar-proximo");
+      const sala = obterSalaSelecionada();
+      const medico = obterMedicoSelecionado();
+
+      if (!sala) {
+        exibirNotificacao("Por favor, selecione ou informe a sala.", "error");
+        return;
+      }
+      if (!medico) {
+        exibirNotificacao("Por favor, selecione ou informe o médico.", "error");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Chamando...";
+
+      try {
+        const resp = await requisicaoApi("/api/chamar-proximo/", {
+          method: "POST",
+          body: { sala, medico }
+        });
+
+        if (resp.status === 201) {
+          const chamada = await resp.json();
+          exibirNotificacao(`Chamada realizada: ${chamada.paciente} -> Sala ${chamada.sala} (${chamada.medico})`, "success");
+          await carregarDados();
+        } else if (resp.status === 404) {
+          exibirNotificacao("Não há pacientes aguardando na fila.", "warning");
+        } else {
+          const erro = await resp.json().catch(() => ({}));
+          exibirNotificacao(erro.detail || "Erro ao realizar chamada.", "error");
+        }
+      } catch (e) {
+        if (e.message !== "Não autorizado") {
+          exibirNotificacao("Erro de comunicação ao chamar paciente.", "error");
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Chamar Próximo da Fila";
+      }
+    }
+
+    // --- Ações: Remover Paciente ---
+    async function removerPaciente(id, nome) {
+      if (!confirm(`Deseja realmente remover o paciente "${nome}" da fila?`)) {
+        return;
+      }
+
+      try {
+        const resp = await requisicaoApi(`/api/pacientes/${id}/`, {
+          method: "DELETE"
+        });
+
+        if (resp.status === 204) {
+          exibirNotificacao(`Paciente "${nome}" removido da fila.`, "success");
+          await carregarDados();
+        } else if (resp.status === 409) {
+          exibirNotificacao("Este paciente já havia sido removido.", "warning");
+          await carregarDados();
+        } else {
+          exibirNotificacao("Não foi possível remover o paciente.", "error");
+        }
+      } catch (e) {
+        if (e.message !== "Não autorizado") {
+          exibirNotificacao("Erro de comunicação ao remover paciente.", "error");
+        }
+      }
+    }
+
+    function escaparHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // --- Inicialização ---
+    async function inicializarDados() {
+      if (verificarAutenticacao()) {
+        await Promise.all([carregarRecursos(), carregarDados()]);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      inicializarDados();
+      // Atualização periódica da fila a cada 4 segundos
+      setInterval(() => {
+        if (obterToken()) carregarDados();
+      }, 4000);
+    });
+  </script>
+</body>
+</html>

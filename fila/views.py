@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.views.generic import TemplateView
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -102,4 +103,17 @@ class RecursosAtendimentoView(APIView):
             {"salas": salas, "medicos": medicos}
         )
         return Response(serializer.data)
+
+
+class AdminFilaView(TemplateView):
+    """Página HTML da interface de administração da fila (Recepção)."""
+
+    template_name = "fila/admin_fila.html"
+
+
+class PainelPublicoView(TemplateView):
+    """Página HTML do painel público de chamadas para TV/Monitor (Sala de Espera)."""
+
+    template_name = "fila/painel.html"
+
 
