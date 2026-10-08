@@ -1,9 +1,18 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from .models import Chamada, Paciente
+import threading
+
+from .models import Chamada, Medico, Paciente, Sala
+from .services import (
+    FilaVaziaError,
+    PacienteJaRemovidoError,
+    cadastrar_paciente,
+    chamar_proximo,
+    remover_paciente,
+)
 
 
 class BaseAPITestCase(TestCase):
@@ -187,3 +196,109 @@ class PainelPublicoTests(BaseAPITestCase):
         cliente = APIClient()
         cliente.credentials(HTTP_AUTHORIZATION="Token token-invalido")
         self.assertEqual(cliente.get("/api/painel/").status_code, 200)
+
+
+class TelasHtmlTests(BaseAPITestCase):
+    def test_pagina_admin_fila_responde_200(self):
+        resp = self.anonimo.get("/admin-fila/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Fila de Pronto-Socorro", resp.content.decode("utf-8"))
+
+    def test_pagina_painel_responde_200(self):
+        resp = self.anonimo.get("/painel/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Painel de Chamadas", resp.content.decode("utf-8"))
+
+
+class RecursosAtendimentoTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        Sala.objects.create(nome="Consultório 1", ativo=True)
+        Sala.objects.create(nome="Consultório 2 - Reforma", ativo=False)
+        Medico.objects.create(nome="Dra. Helena", ativo=True)
+        Medico.objects.create(nome="Dr. Roberto - Férias", ativo=False)
+
+    def test_recursos_atendimento_exige_autenticacao_admin(self):
+        self.assertEqual(self.anonimo.get("/api/recursos-atendimento/").status_code, 401)
+        self.assertEqual(self.cliente_comum.get("/api/recursos-atendimento/").status_code, 403)
+
+    def test_recursos_atendimento_retorna_apenas_ativos(self):
+        resp = self.cliente_admin.get("/api/recursos-atendimento/")
+        self.assertEqual(resp.status_code, 200)
+        salas = resp.data["salas"]
+        medicos = resp.data["medicos"]
+
+        self.assertEqual(len(salas), 1)
+        self.assertEqual(salas[0]["nome"], "Consultório 1")
+
+        self.assertEqual(len(medicos), 1)
+        self.assertEqual(medicos[0]["nome"], "Dra. Helena")
+
+    def test_recursos_atendimento_somente_leitura(self):
+        for metodo in ("post", "put", "patch", "delete"):
+            resp = getattr(self.cliente_admin, metodo)("/api/recursos-atendimento/", {}, format="json")
+            self.assertEqual(resp.status_code, 405, metodo)
+
+
+class DisciplinaFIFOTests(BaseAPITestCase):
+    def test_ordem_fifo_estrita(self):
+        pacientes_nomes = ["Carlos Souza", "Beatriz Alves", "Daniel Silva", "Aline Ferreira"]
+        ids = [self.cadastrar(nome) for nome in pacientes_nomes]
+
+        chamadas = []
+        for i in range(len(pacientes_nomes)):
+            resp = self.cliente_admin.post(
+                "/api/chamar-proximo/",
+                {"sala": f"Sala {i + 1}", "medico": "Dr. Teste"},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 201)
+            chamadas.append(resp.data)
+
+        for i, paciente_id in enumerate(ids):
+            paciente = Paciente.objects.get(pk=paciente_id)
+            self.assertEqual(paciente.status, Paciente.Status.CHAMADO)
+            self.assertEqual(chamadas[i]["paciente"], paciente.nome_publico)
+
+        resp_vazia = self.cliente_admin.post(
+            "/api/chamar-proximo/",
+            {"sala": "Sala 1", "medico": "Dr. Teste"},
+            format="json",
+        )
+        self.assertEqual(resp_vazia.status_code, 404)
+
+
+class ConcorrenciaTests(TransactionTestCase):
+    def test_chamada_concorrente_nao_duplica_paciente(self):
+        cadastrar_paciente("Paciente Único")
+
+        resultados = []
+        bloqueios_ou_vazios = []
+
+        def worker():
+            from django.db import connection, OperationalError
+
+            try:
+                ch = chamar_proximo(sala="Sala 1", medico="Dr. X")
+                resultados.append(ch.id)
+            except (FilaVaziaError, OperationalError) as err:
+                bloqueios_ou_vazios.append(type(err).__name__)
+            finally:
+                connection.close()
+
+        t1 = threading.Thread(target=worker)
+        t2 = threading.Thread(target=worker)
+
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # O lock atômico garante que exatamente uma chamada teve sucesso e o paciente jamais é duplicado
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(len(bloqueios_ou_vazios), 1)
+        self.assertEqual(Chamada.objects.count(), 1)
+        self.assertEqual(
+            Paciente.objects.filter(status=Paciente.Status.CHAMADO).count(), 1
+        )
+
