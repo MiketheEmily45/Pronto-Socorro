@@ -39,3 +39,29 @@ class Chamada(models.Model):
 
     def __str__(self):
         return f"{self.paciente.nome_publico} -> sala {self.sala} ({self.medico})"
+
+
+class Sala(models.Model):
+    nome = models.CharField(max_length=50, unique=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "Sala"
+        verbose_name_plural = "Salas"
+
+    def __str__(self):
+        return self.nome
+
+
+class Medico(models.Model):
+    nome = models.CharField(max_length=120, unique=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+        verbose_name = "Médico"
+        verbose_name_plural = "Médicos"
+
+    def __str__(self):
+        return self.nome

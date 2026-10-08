@@ -5,12 +5,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import services
-from .models import Paciente
+from .models import Medico, Paciente, Sala
 from .serializers import (
     ChamadaPublicaSerializer,
     ChamarProximoSerializer,
     PacienteSerializer,
     PainelSerializer,
+    RecursosAtendimentoSerializer,
 )
 
 
@@ -82,3 +83,23 @@ class PainelView(APIView):
 
     def get(self, request):
         return Response(PainelSerializer(services.estado_do_painel()).data)
+
+
+class RecursosAtendimentoView(APIView):
+    """
+    GET /api/recursos-atendimento/  (somente administrador autenticado)
+
+    Devolve listas de salas e médicos ativos para preencher os seletores
+    na tela de atendimento do administrador.
+    """
+
+    http_method_names = ["get", "head", "options"]
+
+    def get(self, request):
+        salas = Sala.objects.filter(ativo=True)
+        medicos = Medico.objects.filter(ativo=True)
+        serializer = RecursosAtendimentoSerializer(
+            {"salas": salas, "medicos": medicos}
+        )
+        return Response(serializer.data)
+

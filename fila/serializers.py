@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Chamada, Paciente
+from .models import Chamada, Medico, Paciente, Sala
 
 
 class PacienteSerializer(serializers.ModelSerializer):
@@ -37,3 +37,21 @@ class PainelSerializer(serializers.Serializer):
     aguardando = serializers.IntegerField()
     chamadas = ChamadaPublicaSerializer(many=True)
     ultima_chamada_id = serializers.IntegerField(allow_null=True)
+
+
+class SalaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sala
+        fields = ["id", "nome"]
+
+
+class MedicoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Medico
+        fields = ["id", "nome"]
+
+
+class RecursosAtendimentoSerializer(serializers.Serializer):
+    salas = SalaSerializer(many=True)
+    medicos = MedicoSerializer(many=True)
+
